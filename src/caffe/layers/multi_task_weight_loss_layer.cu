@@ -19,8 +19,8 @@ Dtype RBF_kernel(const Dtype* X, const Dtype* Y, Dtype* temp, Dtype coefficient,
 template <typename Dtype>
 void MultiTaskWeightLossLayer<Dtype>::Forward_gpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-    Dtype* temp_W1 = temp_.mutable_gpu_data();
-    Dtype* temp_W2 = temp_.mutable_gpu_diff();
+    Dtype* tempW1 = temp_.mutable_gpu_data();
+    Dtype* tempW2 = temp_.mutable_gpu_diff();
     
     //calculate sigma in RBF kernel
     srand((unsigned int) time(0));
@@ -33,14 +33,14 @@ void MultiTaskWeightLossLayer<Dtype>::Forward_gpu(
         w2 = (w1 == w2) ? (w1 + 1) % total_W_num_ : w2;
         for(int j = 0;j < N_.size();++j){
             if(w1 < N_[i]){
-                caffe_gpu_memcpy(K_[0] * sizeof(Dtype), bottom[i]->gpu_data() + w1 * K_[0], temp_W1);
+                caffe_gpu_memcpy(K_[0] * sizeof(Dtype), bottom[i]->gpu_data() + w1 * K_[0], tempW1);
                 w1 = INT_MAX;
             }
             else{
                 w1 -= N_[i];
             }
             if(w2 < N_[i]){
-                caffe_gpu_memcpy(K_[0] * sizeof(Dtype), bottom[i]->gpu_data() + w2 * K_[0], temp_W2);
+                caffe_gpu_memcpy(K_[0] * sizeof(Dtype), bottom[i]->gpu_data() + w2 * K_[0], tempW2);
                 w1 = INT_MAX;
             }
             else{
@@ -77,8 +77,8 @@ template <typename Dtype>
 void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
     Dtype kernel_coefficient = -0.5 * total_W_num_ / sigma_;
-    Dtype* temp_W1 = temp_.mutable_gpu_data();
-    Dtype* temp_W2 = temp_.mutable_gpu_diff();
+    Dtype* tempW1 = temp_.mutable_gpu_data();
+    Dtype* tempW2 = temp_.mutable_gpu_diff();
 
     caffe_set(num_of_tasks_ * num_of_tasks_, Dtype(0), Omega_cache_);
     //update W
