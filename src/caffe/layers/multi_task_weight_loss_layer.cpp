@@ -12,24 +12,26 @@ void MultiTaskWeightLossLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   LossLayer<Dtype>::LayerSetUp(bottom, top);
   num_of_tasks_ = bottom.size();
-  Omega_ = new Dtype[num_of_tasks_ * num_of_tasks_];
-  Omega_cache_ = new Dtype[num_of_tasks_ * num_of_tasks_];
-  caffe_set(num_of_tasks_ * num_of_tasks_, Dtype(0), Omega_);
+  Omega_.Reshape(1, 1, num_of_tasks_, num_of_tasks_);
   int max_N = 0;
   int max_K = 0;  
   total_W_num_ = 0;
+  D_.Reshape(1, 1, 1, num_of_tasks_);
   for(int i = 0;i < bottom.size();++i){
-      N_.push_back(bottom[i]->count(0, 1));
-      K_.push_back(bottom[i]->count(1));
-      if(N_[i] > max_N){
-          max_N = N_[i];
+      D_.mutable_cpu_data()[i] = bottom[i]->count(0, 1);
+      D_.mutable_cpu_diff()[i] = bottom[i]->count(1);
+      if(D_.cpu_data()[i] > max_N){
+          max_N = D_.cpu_data()[i];
       }
-      if(K_[i] > max_K){
-          max_K = K_[i];
+      if(D_.cpu_diff()[i] > max_K){
+          max_K = D_.cpu_diff()[i];
       }
-      total_W_num_ += N_[i];
+      total_W_num_ += D_.cpu_data()[i];
   }
-  temp_.Reshape(1, 1, 1, max_K);
+  temp_.Reshape(1, 1, 1, total_W_num_);
+  data_.Reshape(1, total_W_num_, total_W_num_, max_K);
+  kernel_.Reshape(1, 1, total_W_num_, total_W_num_);
+  dimension_ = max_K;
 }
 
 template <typename Dtype>

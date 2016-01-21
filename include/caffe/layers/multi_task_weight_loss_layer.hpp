@@ -37,14 +37,15 @@ class MultiTaskWeightLossLayer : public LossLayer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   
-  Dtype* Omega_;
-  Dtype* Omega_cache_;
-  int num_of_tasks_;
-  Dtype sigma_;
+  Blob<Dtype> Omega_;
+  Blob<Dtype> data_;
+  Blob<Dtype> D_;
   Blob<Dtype> temp_;
-  vector<int> N_;
-  vector<int> K_;
+  Blob<Dtype> kernel_;
+  Dtype sigma_;
+  int num_of_tasks_;
   int total_W_num_;
+  int dimension_;
 };
 
 }  // namespace caffe
