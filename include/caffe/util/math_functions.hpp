@@ -246,6 +246,12 @@ void caffe_gpu_fabs(const int n, const Dtype* x, Dtype* y);
 template <typename Dtype>
 void caffe_gpu_scale(const int n, const Dtype alpha, const Dtype *x, Dtype* y);
 
+template <typename Dtype>
+void caffe_cpu_matrix_sqrt(const int n, Dtype *A);
+
+template <typename Dtype>
+void caffe_cpu_inverse(const int d, Dtype* A);
+
 #define DEFINE_AND_INSTANTIATE_GPU_UNARY_FUNC(name, operation) \
 template<typename Dtype> \
 __global__ void name##_kernel(const int n, const Dtype* x, Dtype* y) { \

@@ -7,6 +7,8 @@
 
 #else  // If use MKL, simply include the MKL header
 
+#include <lapacke.h>
+
 extern "C" {
 #include <cblas.h>
 }

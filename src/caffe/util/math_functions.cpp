@@ -372,4 +372,48 @@ void caffe_cpu_scale<double>(const int n, const double alpha, const double *x,
   cblas_dscal(n, alpha, y, 1);
 }
 
+template <>
+void caffe_cpu_inverse<double>(const int d, double* A){
+}
+
+template <>
+void caffe_cpu_inverse<float>(const int d, float* A){
+   int* IPIV = new int[d]; 
+   LAPACKE_sgetrf(LAPACK_ROW_MAJOR, d, d, A, d, IPIV);
+   LAPACKE_sgetri(LAPACK_ROW_MAJOR, d, A, d, IPIV);
+   delete [] IPIV; 
+}
+
+template <>
+void caffe_cpu_matrix_sqrt<double>(const int d, double *A){
+}
+
+template <>
+void caffe_cpu_matrix_sqrt<float>(const int d, float *A){
+    float* eigenvalues = new float[d];
+    LAPACKE_ssyev(LAPACK_ROW_MAJOR, 'V', 'U', d, A, d, eigenvalues);
+
+    float *eigenvalue_matrix = new float[d * d];
+    caffe_set(d * d, 0.0f, eigenvalue_matrix);
+    for(int i = 0;i < d;++i){
+        eigenvalues[i] = sqrt(eigenvalues[i]);
+    }
+    for(int i = 0;i < d;++i){
+        eigenvalue_matrix[i * (d + 1)] = eigenvalues[i];
+    }
+    
+    float* eigenvectors = new float[d * d];
+    caffe_gpu_memcpy(d * d * sizeof(float), A, eigenvectors);
+
+    float* temp = new float[d * d];
+    
+    caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, d, d, d, 1.0f, A, eigenvalue_matrix, 0.0f, temp);
+    caffe_cpu_gemm(CblasNoTrans, CblasTrans, d, d, d, 1.0f, temp, eigenvectors, 0.0f, A);
+    
+    delete [] eigenvalues;
+    delete [] eigenvalue_matrix;
+    delete [] temp;
+    delete [] eigenvectors;
+}
+
 }  // namespace caffe
