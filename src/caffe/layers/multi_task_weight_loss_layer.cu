@@ -54,6 +54,7 @@ void MultiTaskWeightLossLayer<Dtype>::Forward_gpu(
     
     //use redundent memory of data as (1, 1, ..., 1) multiplier
     Dtype* vector_sum_multiplier = data_.mutable_gpu_data() + total_W_num_ * dimension_;
+    CHECK_GE((total_W_num_ - 1) * total_W_num_ * dimension_, dimension_) << "not enough data space";
     caffe_gpu_set(dimension_, Dtype(1.0), vector_sum_multiplier);
     
     caffe_gpu_gemv(CblasNoTrans, total_W_num_ * total_W_num_, dimension_, Dtype(1.0), 
@@ -83,6 +84,7 @@ void MultiTaskWeightLossLayer<Dtype>::Forward_gpu(
     
     Dtype loss = 0;
     caffe_gpu_set(total_W_num_ * total_W_num_, Dtype(1.0), vector_sum_multiplier);
+    CHECK_GE((total_W_num_ - 1) * total_W_num_ * dimension_, total_W_num_ * total_W_num_) << "not enough data space";
     caffe_gpu_dot(total_W_num_ * total_W_num_, vector_sum_multiplier, kernel_.gpu_diff(), &loss);
     
     top[0]->mutable_cpu_data()[0] = loss;
