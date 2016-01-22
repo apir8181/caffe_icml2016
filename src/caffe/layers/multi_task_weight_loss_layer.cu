@@ -127,6 +127,16 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
     Dtype* vector_sum_multiplier = data_.mutable_gpu_data() + total_W_num_ * dimension_;
     caffe_gpu_set(total_W_num_, Dtype(1.0), vector_sum_multiplier);
     int offset = 0;
+    
+    for(int i = 0;i < num_of_tasks_;++i){
+        for(int j = 0;j < D_.cpu_data()[i];++j){
+            for(int k = 0;k < num_of_tasks_;++k){
+                if(i == k) continue;
+                
+            }
+        }
+    }
+    
     for(int i = 0;i < num_of_tasks_;++i){
         for(int j = 0;j < D_.cpu_data()[i];++j){
             caffe_gpu_gemv(CblasTrans, total_W_num_, dimension_, Dtype(1.0), 
