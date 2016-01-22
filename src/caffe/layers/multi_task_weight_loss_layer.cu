@@ -126,24 +126,16 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
     //use redundent memory of data as (1, 1, ..., 1) multiplier
     Dtype* vector_sum_multiplier = data_.mutable_gpu_data() + total_W_num_ * dimension_;
     caffe_gpu_set(total_W_num_, Dtype(1.0), vector_sum_multiplier);
-    int offset = 0;
     
     for(int i = 0;i < num_of_tasks_;++i){
         for(int j = 0;j < D_.cpu_data()[i];++j){
+            caffe_gpu_set(dimension_, Dtype(0), bottom[i]->mutable_gpu_diff() + j * dimension_);
             for(int k = 0;k < num_of_tasks_;++k){
                 if(i == k) continue;
-                
+                int offset = ((i * D_.cpu_data()[0] + j) * total_W_num_ + k * D_.cpu_data()[0] + j) * dimension_;
+                caffe_gpu_add(dimension_, data_.gpu_diff() + offset, bottom[i]->gpu_diff() + j * dimension_, bottom[i]->mutable_gpu_diff() + j * dimension_);
             }
         }
-    }
-    
-    for(int i = 0;i < num_of_tasks_;++i){
-        for(int j = 0;j < D_.cpu_data()[i];++j){
-            caffe_gpu_gemv(CblasTrans, total_W_num_, dimension_, Dtype(1.0), 
-                data_.gpu_diff() + offset, vector_sum_multiplier, Dtype(1.0), bottom[i]->mutable_gpu_diff() + j * dimension_);
-            offset += total_W_num_ * dimension_;
-        }
-        //scale by loss_weight
         caffe_gpu_scal(D_.cpu_data()[i] * dimension_, top[0]->cpu_diff()[0], bottom[i]->mutable_gpu_diff());
     }
     
@@ -152,10 +144,13 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
     Dtype* A = Omega_.mutable_cpu_diff();
     const Dtype* kernel = kernel_.cpu_data();
     
-    for(int i = 0;i < (total_W_num_ * total_W_num_);++i){
-        int p = task_index[i / total_W_num_];
-        int q = task_index[i % total_W_num_];
-        A[p * num_of_tasks_ + q] += kernel[i];
+    for(int i = 0;i < num_of_tasks_;++i){
+        for(int j = 0;j < num_of_tasks_;++j){
+            for(int k = 0;k < D_.cpu_data()[0];++k){
+                int offset = (i * D_.cpu_data()[0] + k) * total_W_num_ + j * D_.cpu_data()[0] + k;
+                A[i * num_of_tasks_ + j] += kernel[offset];
+            }
+        }
     }
     
     if(debug_info_){
