@@ -25,7 +25,7 @@ void WeightTransferLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const vector<Blob<Dtype>*>& bottom) {
     const Dtype* top_diff = top[0]->gpu_diff();
     Dtype* weight_diff = this->blobs_[0]->mutable_gpu_diff();
-    caffe_gpu_add(this->blobs_[0]->count() * sizeof(Dtype), top_diff, weight_diff, weight_diff);
+    caffe_gpu_add(this->blobs_[0]->count(), top_diff, weight_diff, weight_diff);
 }
 
 INSTANTIATE_LAYER_GPU_FUNCS(WeightTransferLayer);

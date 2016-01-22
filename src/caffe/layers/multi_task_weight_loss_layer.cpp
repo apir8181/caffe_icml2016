@@ -11,8 +11,13 @@ template <typename Dtype>
 void MultiTaskWeightLossLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   LossLayer<Dtype>::LayerSetUp(bottom, top);
+  debug_info_ = this->layer_param_.weight_loss_param().debug_info();
   num_of_tasks_ = bottom.size();
   Omega_.Reshape(1, 1, num_of_tasks_, num_of_tasks_);
+  caffe_gpu_set(Omega_.count(), Dtype(0), Omega_.mutable_gpu_data());
+  for(int i = 0;i < num_of_tasks_;++i){
+      Omega_.mutable_cpu_data()[i * (num_of_tasks_ + 1)] = Dtype(1);
+  }
   int max_N = 0;
   int max_K = 0;  
   total_W_num_ = 0;

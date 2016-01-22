@@ -46,6 +46,7 @@ class MultiTaskWeightLossLayer : public LossLayer<Dtype> {
   int num_of_tasks_;
   int total_W_num_;
   int dimension_;
+  bool debug_info_;
 };
 
 }  // namespace caffe

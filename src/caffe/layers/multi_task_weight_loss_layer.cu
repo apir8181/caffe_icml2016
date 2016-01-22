@@ -5,6 +5,7 @@
 
 #include "caffe/layers/multi_task_weight_loss_layer.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "caffe/util/output_matrix.hpp"
 
 namespace caffe {
 
@@ -104,7 +105,7 @@ __global__ void CalculateDiffGPU(const int nthreads,
       
       Dtype omega = Omega[p * num_of_tasks + q];
       
-      diff[(i * num + j) * dim + k] = 2 * omega * kernel[i * num + j] * coefficient * (data[(i * num + j) * dim + k] - data[(j * num + i) * dim + k]);
+      diff[(i * num + j) * dim + k] = 2 * omega * kernel[i * num + j] * coefficient * (data[i * dim + k] - data[j * dim + k]);
   }
 }
 
@@ -147,7 +148,18 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
         A[p * num_of_tasks_ + q] += kernel[i];
     }
     
+    if(debug_info_){
+        LOG(INFO) << "-------------------------------------begin";
+        print_gpu_matrix(A, num_of_tasks_, num_of_tasks_, num_of_tasks_, num_of_tasks_);
+    }
+    
     caffe_cpu_matrix_sqrt(num_of_tasks_, A);
+
+    if(debug_info_){
+        LOG(INFO) << "-------------------------------------aftar sqrt";
+        print_gpu_matrix(A, num_of_tasks_, num_of_tasks_, num_of_tasks_, num_of_tasks_);    
+    }
+    
     //calculate trace
     Dtype trace = 0;
     for(int i = 0;i < num_of_tasks_;++i){
@@ -155,8 +167,18 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
     }
     //divide by trace
     caffe_scal(num_of_tasks_ * num_of_tasks_, 1 / trace, A);
+    
+    if(debug_info_){
+        LOG(INFO) << "-------------------------------------aftar divide trace";
+        print_gpu_matrix(A, num_of_tasks_, num_of_tasks_, num_of_tasks_, num_of_tasks_);
+    }
     //inverse
     caffe_cpu_inverse(num_of_tasks_, A);
+    
+    if(debug_info_){
+        LOG(INFO) << "-------------------------------------aftar inverse";
+        print_gpu_matrix(A, num_of_tasks_, num_of_tasks_, num_of_tasks_, num_of_tasks_);    
+    }
     //copy to Omega
     caffe_gpu_memcpy(sizeof(Dtype) * num_of_tasks_ * num_of_tasks_, A, Omega_.mutable_gpu_data());
 }
