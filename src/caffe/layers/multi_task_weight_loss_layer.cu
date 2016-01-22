@@ -22,6 +22,20 @@ __global__ void CalculateKernelGPU(const int nthreads,
 }
 
 template <typename Dtype>
+__global__ void CalculateLossGPU(const int nthreads,
+          const Dtype* kernel, const Dtype* task_index, 
+          const Dtype* Omega, const int num, const int num_of_tasks, Dtype* loss) {
+  CUDA_KERNEL_LOOP(index, nthreads) {
+      int i = index / num;
+      int j = index % num;
+      int p = task_index[i];
+      int q = task_index[j];
+      
+      loss[index] = kernel[index] * Omega[p * num_of_tasks + q];
+  }
+}
+
+template <typename Dtype>
 void MultiTaskWeightLossLayer<Dtype>::Forward_gpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
     //flatten data
@@ -52,7 +66,26 @@ void MultiTaskWeightLossLayer<Dtype>::Forward_gpu(
     caffe_gpu_scal(total_W_num_ * total_W_num_, kernel_coefficient, kernel_.mutable_gpu_data());
     caffe_gpu_exp(total_W_num_ * total_W_num_, kernel_.gpu_data(), kernel_.mutable_gpu_data());
     
-    top[0]->mutable_cpu_data()[0] = Dtype(0);
+    Dtype* task_index = temp_.mutable_cpu_data();
+    int index = 0;
+    for(int i = 0, j = 0;i < total_W_num_;++i, ++j){
+        if(j >= D_.cpu_data()[index]){
+            j = 0;
+            index++;
+        }
+        task_index[i] = index;
+    }
+    
+    nthreads = total_W_num_ * total_W_num_;
+    CalculateLossGPU<Dtype><<<CAFFE_GET_BLOCKS(nthreads),
+      CAFFE_CUDA_NUM_THREADS>>>(nthreads, kernel_.gpu_data(), temp_.gpu_data(),
+      Omega_.gpu_data(), total_W_num_, num_of_tasks_, kernel_.mutable_gpu_diff());
+    
+    Dtype loss = 0;
+    caffe_gpu_set(total_W_num_ * total_W_num_, Dtype(1.0), vector_sum_multiplier);
+    caffe_gpu_dot(total_W_num_ * total_W_num_, vector_sum_multiplier, kernel_.gpu_diff(), &loss);
+    
+    top[0]->mutable_cpu_data()[0] = loss;
 }
 
 template <typename Dtype>
@@ -79,14 +112,6 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
     Dtype kernel_coefficient = -0.5 * total_W_num_ * (total_W_num_ - 1) / sigma_;
 
     Dtype* task_index = temp_.mutable_cpu_data();
-    int index = 0;
-    for(int i = 0, j = 0;i < total_W_num_;++i, ++j){
-        if(j >= D_.cpu_data()[index]){
-            j = 0;
-            index++;
-        }
-        task_index[i] = index;
-    }
     
     //calculate diff
     int nthreads = total_W_num_ * total_W_num_ * dimension_;
