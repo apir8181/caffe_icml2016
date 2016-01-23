@@ -29,24 +29,35 @@ class MultiTaskWeightLossLayer : public LossLayer<Dtype> {
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
+													 const vector<Blob<Dtype>*>& top) {
+		NOT_IMPLEMENTED;
+	}
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+		const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom){
+		NOT_IMPLEMENTED;
+	}
   virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
-  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   
-  Blob<Dtype> Omega_;
+	bool debug_info_;
+  int num_tasks_, num_classes_, feature_dim_;
   Blob<Dtype> data_;
-  Blob<Dtype> D_;
-  Blob<Dtype> temp_;
-  Blob<Dtype> kernel_;
-  Dtype sigma_;
-  int num_of_tasks_;
-  int total_W_num_;
-  int dimension_;
-  bool debug_info_;
+	Blob<int> task_start_index_, task_end_index_;
+	Blob<int> data2task_;
+	Blob<Dtype> pairwise_distance_;
+	Blob<Dtype> pairwise_kernel_;
+	Blob<Dtype> loss_;
+  Blob<Dtype> Omega_, A_;
+	Dtype sigma_;
+
+  //Blob<Dtype> D_;
+  //Blob<Dtype> temp_;
+  //Blob<Dtype> kernel_;
+  //int total_W_num_;
+  //int dimension_;
+  
 };
 
 }  // namespace caffe
