@@ -113,6 +113,11 @@ void MultiTaskWeightLossLayer<Dtype>::Forward_gpu(
 	calculate_pairwise_distance<Dtype><<<CAFFE_GET_BLOCKS(num_threads),
 		CAFFE_CUDA_NUM_THREADS>>>(data, pairwise_distance, num_classes_, feature_dim_);
 
+	if(debug_info_){
+		LOG(INFO) << "-------------------------------------distance matrix";
+		print_gpu_matrix(pairwise_distance, num_classes_, num_classes_, num_classes_, num_classes_);
+	}
+
 	// calculate sigma
 	caffe_gpu_asum<Dtype>(pairwise_distance_.count(), pairwise_distance, &sigma_);
 	sigma_ /= num_classes_;
