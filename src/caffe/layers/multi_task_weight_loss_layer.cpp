@@ -13,6 +13,7 @@ void MultiTaskWeightLossLayer<Dtype>::LayerSetUp(
   LossLayer<Dtype>::LayerSetUp(bottom, top);
 
   debug_info_ = this->layer_param_.weight_loss_param().debug_info();
+	debug_detail_ = this->layer_param_.weight_loss_param().debug_detail();
   num_tasks_ = bottom.size();
 	
 	num_classes_ = 0;
@@ -46,36 +47,18 @@ void MultiTaskWeightLossLayer<Dtype>::LayerSetUp(
 		}
 	}
 
-	pairwise_distance_.Reshape(num_classes_, num_classes_, 1, 1);
+	pairwise_sqr_distance_.Reshape(num_classes_, num_classes_, 1, 1);
 	pairwise_kernel_.Reshape(num_classes_, num_classes_, 1, 1);
 
-	loss_.Reshape(num_tasks_, num_tasks_, 1, 1);
-	Omega_.Reshape(num_tasks_, num_tasks_, 1, 1);
-	A_.Reshape(num_tasks_, num_tasks_, 1, 1);
-	caffe_gpu_set<Dtype>(num_tasks_ * num_tasks_, 0, Omega_.mutable_gpu_data());
+	vector<int> pair_task_shape(2, num_tasks_);
+	loss_.Reshape(pair_task_shape);
+	A_.Reshape(pair_task_shape);
+	this->blobs_.resize(1);
+	this->blobs_[0].reset(new Blob<Dtype>(pair_task_shape));
+	caffe_gpu_set<Dtype>(num_tasks_ * num_tasks_, 0, this->blobs_[0]->mutable_gpu_data());
 	for (int i = 0; i < num_tasks_; ++ i) {
-		Omega_.mutable_cpu_data()[i * (num_tasks_ + 1)] = 1;
+		this->blobs_[0]->mutable_cpu_data()[i * (num_tasks_ + 1)] = 1.0 / num_tasks_;
 	}
-
-  // int max_N = 0;
-  // int max_K = 0;  
-  // total_W_num_ = 0;
-  // D_.Reshape(1, 1, 1, num_of_tasks_);
-  // for(int i = 0;i < bottom.size();++i){
-  //     D_.mutable_cpu_data()[i] = bottom[i]->count(0, 1);
-  //     D_.mutable_cpu_diff()[i] = bottom[i]->count(1);
-  //     if(D_.cpu_data()[i] > max_N){
-  //         max_N = D_.cpu_data()[i];
-  //     }
-  //     if(D_.cpu_diff()[i] > max_K){
-  //         max_K = D_.cpu_diff()[i];
-  //     }
-  //     total_W_num_ += D_.cpu_data()[i];
-  // }
-  // temp_.Reshape(1, 1, 1, total_W_num_);
-  // data_.Reshape(1, total_W_num_, total_W_num_, max_K);
-  // kernel_.Reshape(1, 1, total_W_num_, total_W_num_);
-  // dimension_ = max_K;
 }
 
 template <typename Dtype>

@@ -1255,6 +1255,7 @@ message PReLUParameter {
 
 message WeightLossParameter {
   optional bool debug_info = 1 [default = false]; // whether to have bias terms
+  optional bool debug_detail = 2 [default = false];
 }
 
 message WeightTransferParameter {

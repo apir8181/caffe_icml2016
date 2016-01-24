@@ -41,22 +41,16 @@ class MultiTaskWeightLossLayer : public LossLayer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   
-	bool debug_info_;
+	bool debug_info_, debug_detail_;
   int num_tasks_, num_classes_, feature_dim_;
   Blob<Dtype> data_;
 	Blob<int> task_start_index_, task_end_index_;
 	Blob<int> data2task_;
-	Blob<Dtype> pairwise_distance_;
+	Blob<Dtype> pairwise_sqr_distance_;
 	Blob<Dtype> pairwise_kernel_;
 	Blob<Dtype> loss_;
-  Blob<Dtype> Omega_, A_;
+  Blob<Dtype> A_;
 	Dtype sigma_;
-
-  //Blob<Dtype> D_;
-  //Blob<Dtype> temp_;
-  //Blob<Dtype> kernel_;
-  //int total_W_num_;
-  //int dimension_;
   
 };
 
