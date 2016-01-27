@@ -11,8 +11,8 @@ void WeightTransferLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   const int axis = bottom[0]->CanonicalAxisIndex(
       this->layer_param_.weight_transfer_param().axis());
-  const int weight_output = bottom[0]->count(axis);
-  const int weight_input = this->layer_param_.weight_transfer_param().weight_input_num();
+  const int weight_output = this->layer_param_.weight_transfer_param().weight_output_num();
+  const int weight_input = bottom[0]->count(axis);
   N_ = weight_output;
   K_ = weight_input;
   // Check if we need to set up the weights
@@ -53,12 +53,12 @@ template <typename Dtype>
 void WeightTransferLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   // Figure out the dimensions
-  const int axis = bottom[0]->CanonicalAxisIndex(
-      this->layer_param_.weight_transfer_param().axis());
-  const int new_N = bottom[0]->count(axis);
-  CHECK_EQ(N_, new_N)
-      << "Input size incompatible with weight transfer parameters.";
-  M_ = bottom[0]->count(0, axis);
+  // const int axis = bottom[0]->CanonicalAxisIndex(
+  //     this->layer_param_.weight_transfer_param().axis());
+  // const int new_N = bottom[0]->count(axis);
+  // CHECK_EQ(N_, new_N)
+  //     << "Input size incompatible with weight transfer parameters.";
+  // M_ = bottom[0]->count(0, axis);
   // The top shape will be the bottom shape with the flattened axes dropped,
   // and replaced by a single axis with dimension num_output (N_).
   vector<int> top_shape(2);
@@ -66,11 +66,11 @@ void WeightTransferLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   top_shape[1] = K_;
   top[0]->Reshape(top_shape);
   // Set up the bias multiplier
-  if (bias_term_) {
-    vector<int> bias_shape(1, M_);
-    bias_multiplier_.Reshape(bias_shape);
-    caffe_set(M_, Dtype(1), bias_multiplier_.mutable_cpu_data());
-  }
+  // if (bias_term_) {
+  //   vector<int> bias_shape(1, M_);
+  //   bias_multiplier_.Reshape(bias_shape);
+  //   caffe_set(M_, Dtype(1), bias_multiplier_.mutable_cpu_data());
+  // }
 }
 
 template <typename Dtype>

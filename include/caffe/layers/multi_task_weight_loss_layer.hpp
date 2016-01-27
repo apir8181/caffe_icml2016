@@ -44,14 +44,11 @@ class MultiTaskWeightLossLayer : public LossLayer<Dtype> {
 	bool debug_info_, debug_detail_;
   int num_tasks_, num_classes_, feature_dim_;
   Blob<Dtype> data_;
-	Blob<int> task_start_index_, task_end_index_;
-	Blob<int> data2task_;
-	Blob<Dtype> pairwise_sqr_distance_;
-	Blob<Dtype> pairwise_kernel_;
+	Blob<int> task_start_index_, task_end_index_, data2task_;
+	Blob<Dtype> pairwise_sqr_distance_, pairwise_kernel_;
 	Blob<Dtype> loss_;
   Blob<Dtype> A_;
 	Dtype sigma_;
-  
 };
 
 }  // namespace caffe

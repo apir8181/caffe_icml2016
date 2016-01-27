@@ -1256,10 +1256,12 @@ message PReLUParameter {
 message WeightLossParameter {
   optional bool debug_info = 1 [default = false]; // whether to have bias terms
   optional bool debug_detail = 2 [default = false];
+  optional float sigma = 3 [default = 1.0];
 }
 
 message WeightTransferParameter {
   optional uint32 weight_input_num = 1; // The number of outputs for the layer
+  optional uint32 weight_output_num = 10;
   optional bool bias_term = 2 [default = true]; // whether to have bias terms
   optional FillerParameter weight_filler = 3; // The filler for the weight
   optional FillerParameter bias_filler = 4; // The filler for the bias

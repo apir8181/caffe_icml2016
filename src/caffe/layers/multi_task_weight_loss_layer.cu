@@ -58,6 +58,26 @@ __global__ void calculate_loss(
 	}
 
 }
+
+
+template <typename Dtype>
+__global__ void calculate_A(
+	  const Dtype* pairwise_kernel, const int* task_start_index, 
+		const int* task_end_index, Dtype* out, 
+		int num_tasks, int num_classes) {
+	
+	CUDA_KERNEL_LOOP(ij, num_tasks * num_tasks) {
+		int i = ij / num_tasks, j = ij % num_tasks;
+		Dtype val = 0;
+		for (int c1 = task_start_index[i]; c1 < task_end_index[i]; ++ c1)
+			for (int c2 = task_start_index[j]; c2 < task_end_index[j]; ++ c2) {
+				int idx = c1 * num_classes + c2;
+				val += pairwise_kernel[idx];
+			}
+		out[ij] = val;
+	}
+
+}
 	
 
 template <typename Dtype>
@@ -81,8 +101,7 @@ void MultiTaskWeightLossLayer<Dtype>::Forward_gpu(
 	}
 
 	// calculate distance
-	int num_threads = num_classes_ * num_classes_;
-	calculate_pairwise_sqr_distance<Dtype><<<CAFFE_GET_BLOCKS(num_threads),
+	calculate_pairwise_sqr_distance<Dtype><<<CAFFE_GET_BLOCKS(num_classes_ * num_classes_),
 		CAFFE_CUDA_NUM_THREADS>>>(data, pairwise_sqr_distance, num_classes_, feature_dim_);
 
 	if(debug_detail_){
@@ -92,20 +111,31 @@ void MultiTaskWeightLossLayer<Dtype>::Forward_gpu(
 
 	// calculate sigma
 	caffe_gpu_asum<Dtype>(pairwise_sqr_distance_.count(), pairwise_sqr_distance, &sigma_);
-	sigma_ /= num_classes_ * (num_classes_ - 1);
+	sigma_ /= num_classes_ * num_classes_;
 
 	if (debug_info_) {
 		LOG(INFO) << "sigma:" << sigma_;
 	}
 
 	// calculate kernel
-	calculate_pairwise_kernel<Dtype><<<CAFFE_GET_BLOCKS(num_threads),
-		CAFFE_CUDA_NUM_THREADS>>>(pairwise_sqr_distance, pairwise_kernel, sigma_, num_threads);
+	calculate_pairwise_kernel<Dtype><<<CAFFE_GET_BLOCKS(num_classes_ * num_classes_),
+		CAFFE_CUDA_NUM_THREADS>>>(pairwise_sqr_distance, pairwise_kernel, sigma_, num_classes_ * num_classes_);
 
 	if (debug_detail_) {
 		LOG(INFO) << "--------------------------------------kernel matrix";
 		print_gpu_matrix(pairwise_kernel, num_classes_, num_classes_, num_classes_, num_classes_);
 	}
+
+	// calculate A
+	calculate_A<Dtype><<<CAFFE_GET_BLOCKS(num_tasks_ * num_tasks_),
+		CAFFE_CUDA_NUM_THREADS>>>(pairwise_kernel, task_start_index, task_end_index,
+															A_.mutable_gpu_data(), num_tasks_, num_classes_);
+
+	if(debug_info_){
+		LOG(INFO) << "-------------------------------------A";
+		print_gpu_matrix(A_.gpu_data(), num_tasks_, num_tasks_, num_tasks_, num_tasks_);
+	}
+
 
 	// calculate loss
 	calculate_loss<Dtype><<<CAFFE_GET_BLOCKS(num_tasks_ * num_tasks_),
@@ -153,26 +183,6 @@ __global__ void backward_weight(
 
 
 template <typename Dtype>
-__global__ void calculate_A(
-	  const Dtype* pairwise_kernel, const int* task_start_index, 
-		const int* task_end_index, Dtype* out, 
-		int num_tasks, int num_classes) {
-	
-	CUDA_KERNEL_LOOP(ij, num_tasks * num_tasks) {
-		int i = ij / num_tasks, j = ij % num_tasks;
-		Dtype val = 0;
-		for (int c1 = task_start_index[i]; c1 < task_end_index[i]; ++ c1)
-			for (int c2 = task_start_index[j]; c2 < task_end_index[j]; ++ c2) {
-				int idx = c1 * num_classes + c2;
-				val += pairwise_kernel[idx];
-			}
-		out[ij] = val;
-	}
-
-}
-
-
-template <typename Dtype>
 void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
 	const Dtype* data = data_.gpu_data();
@@ -182,6 +192,54 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
 	const int* data2task = data2task_.gpu_data();
 	Dtype* Omega = this->blobs_[0]->mutable_gpu_data();
 	Dtype* W_diff = data_.mutable_gpu_diff();
+
+	// calculate A
+	// calculate_A<Dtype><<<CAFFE_GET_BLOCKS(num_tasks_ * num_tasks_),
+	// 	CAFFE_CUDA_NUM_THREADS>>>(pairwise_kernel, task_start_index, task_end_index,
+	// 														A_.mutable_gpu_data(), num_tasks_, num_classes_);
+
+	// if(debug_info_){
+	// 	LOG(INFO) << "-------------------------------------A";
+	// 	print_gpu_matrix(A_.gpu_data(), num_tasks_, num_tasks_, num_tasks_, num_tasks_);
+	// }
+
+	caffe_cpu_matrix_sqrt(num_tasks_, A_.mutable_cpu_data());
+
+  if(debug_info_){
+		LOG(INFO) << "-------------------------------------A^0.5";
+		print_gpu_matrix(A_.gpu_data(), num_tasks_, num_tasks_, num_tasks_, num_tasks_);    
+	}
+
+  // calculate trace(A)
+  Dtype trace = 0;
+  for (int i = 0; i < num_tasks_; ++ i) {
+		trace += A_.mutable_cpu_data()[i * (num_tasks_ + 1)];
+	}
+
+  // divide A by trace(A)
+  caffe_gpu_scal<Dtype>(num_tasks_ * num_tasks_, 1 / trace, A_.mutable_gpu_data());
+    
+  if(debug_info_){
+		LOG(INFO) << "-------------------------------------A^0.5/trace(A^0.5)";
+		print_gpu_matrix(A_.gpu_data(), num_tasks_, num_tasks_, num_tasks_, num_tasks_);
+  }
+
+  for (int i = 0; i < num_tasks_; ++ i) {
+		A_.mutable_cpu_data()[i * (num_tasks_ + 1)] += 1e-5;
+	}
+
+  // inverse A
+  caffe_cpu_inverse<Dtype>(num_tasks_, A_.mutable_cpu_data());
+    
+  if(debug_info_){
+		LOG(INFO) << "-------------------------------------Omega_new";
+		print_gpu_matrix(A_.gpu_data(), num_tasks_, num_tasks_, num_tasks_, num_tasks_);    
+  }
+  
+  // copy to Omega
+  caffe_gpu_memcpy(sizeof(Dtype) * num_tasks_ * num_tasks_, 
+									 A_.gpu_data(), Omega);
+
 	
 	// set weight gradient
 	backward_weight<Dtype><<<CAFFE_GET_BLOCKS(num_classes_ * feature_dim_),
@@ -198,49 +256,6 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
 		count += bottom[i]->count();
 		caffe_gpu_scal<Dtype>(bottom[i]->count(), top[0]->cpu_diff()[0], bottom_diff);
 	}
-
-	// calculate A
-	calculate_A<Dtype><<<CAFFE_GET_BLOCKS(num_tasks_ * num_tasks_),
-		CAFFE_CUDA_NUM_THREADS>>>(pairwise_kernel, task_start_index, task_end_index,
-															A_.mutable_gpu_data(), num_tasks_, num_classes_);
-
-	if(debug_info_){
-		LOG(INFO) << "-------------------------------------begin";
-		print_gpu_matrix(A_.gpu_data(), num_tasks_, num_tasks_, num_tasks_, num_tasks_);
-	}
-
-	caffe_cpu_matrix_sqrt(num_tasks_, A_.mutable_cpu_data());
-
-  if(debug_info_){
-		LOG(INFO) << "-------------------------------------aftar sqrt";
-		print_gpu_matrix(A_.gpu_data(), num_tasks_, num_tasks_, num_tasks_, num_tasks_);    
-	}
-
-  // calculate trace(A)
-  Dtype trace = 0;
-  for (int i = 0; i < num_tasks_; ++ i) {
-		trace += A_.mutable_cpu_data()[i * (num_tasks_ + 1)];
-	}
-
-  // divide A by trace(A)
-  caffe_gpu_scal<Dtype>(num_tasks_ * num_tasks_, 1 / trace, A_.mutable_gpu_data());
-    
-  if(debug_info_){
-		LOG(INFO) << "-------------------------------------aftar divide trace";
-		print_gpu_matrix(A_.gpu_data(), num_tasks_, num_tasks_, num_tasks_, num_tasks_);
-  }
-
-  // inverse A
-  caffe_cpu_inverse<Dtype>(num_tasks_, A_.mutable_cpu_data());
-    
-  if(debug_info_){
-		LOG(INFO) << "-------------------------------------aftar inverse";
-		print_gpu_matrix(A_.gpu_data(), num_tasks_, num_tasks_, num_tasks_, num_tasks_);    
-  }
-  
-  // copy to Omega
-  caffe_gpu_memcpy(sizeof(Dtype) * num_tasks_ * num_tasks_, 
-									 A_.gpu_data(), Omega);
 
 }
 

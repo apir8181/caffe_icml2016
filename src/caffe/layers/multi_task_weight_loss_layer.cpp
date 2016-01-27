@@ -14,6 +14,7 @@ void MultiTaskWeightLossLayer<Dtype>::LayerSetUp(
 
   debug_info_ = this->layer_param_.weight_loss_param().debug_info();
 	debug_detail_ = this->layer_param_.weight_loss_param().debug_detail();
+	sigma_ = this->layer_param_.weight_loss_param().sigma();
   num_tasks_ = bottom.size();
 	
 	num_classes_ = 0;
@@ -53,11 +54,14 @@ void MultiTaskWeightLossLayer<Dtype>::LayerSetUp(
 	vector<int> pair_task_shape(2, num_tasks_);
 	loss_.Reshape(pair_task_shape);
 	A_.Reshape(pair_task_shape);
+
+	// Init Omega
 	this->blobs_.resize(1);
 	this->blobs_[0].reset(new Blob<Dtype>(pair_task_shape));
-	caffe_gpu_set<Dtype>(num_tasks_ * num_tasks_, 0, this->blobs_[0]->mutable_gpu_data());
+	caffe_gpu_set<Dtype>(num_tasks_ * num_tasks_, -1.0 / (num_tasks_ - 1),
+											 this->blobs_[0]->mutable_gpu_data());
 	for (int i = 0; i < num_tasks_; ++ i) {
-		this->blobs_[0]->mutable_cpu_data()[i * (num_tasks_ + 1)] = 1.0 / num_tasks_;
+		this->blobs_[0]->mutable_cpu_data()[i * (num_tasks_ + 1)] = 1.0;
 	}
 }
 
