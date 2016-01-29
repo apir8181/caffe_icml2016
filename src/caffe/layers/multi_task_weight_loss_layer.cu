@@ -7,6 +7,7 @@
 #include "caffe/layers/multi_task_weight_loss_layer.hpp"
 #include "caffe/util/math_functions.hpp"
 #include "caffe/util/output_matrix.hpp"
+#define NUM_CLASSIFIER 12
 
 namespace caffe {
 
@@ -49,11 +50,12 @@ __global__ void calculate_loss(
 	CUDA_KERNEL_LOOP(ij, num_tasks * num_tasks) {
 		int i = ij / num_tasks, j = ij % num_tasks;
 		Dtype val = 0;
-		for (int c1 = task_start_index[i]; c1 < task_end_index[i]; ++ c1)
-			for (int c2 = task_start_index[j]; c2 < task_end_index[j]; ++ c2) {
-				int idx = c1 * num_classes + c2;
-				val += Omega[ij] * pairwise_kernel[idx];
-			}
+		for (int offset = 0; offset < NUM_CLASSIFIER; ++ offset) {
+			int c1 = task_start_index[i] + offset;
+			int c2 = task_start_index[j] + offset;
+			int idx = c1 * num_classes + c2;
+			val += Omega[ij] * pairwise_kernel[idx];
+		}
 		out[ij] = val;
 	}
 
@@ -69,11 +71,12 @@ __global__ void calculate_A(
 	CUDA_KERNEL_LOOP(ij, num_tasks * num_tasks) {
 		int i = ij / num_tasks, j = ij % num_tasks;
 		Dtype val = 0;
-		for (int c1 = task_start_index[i]; c1 < task_end_index[i]; ++ c1)
-			for (int c2 = task_start_index[j]; c2 < task_end_index[j]; ++ c2) {
-				int idx = c1 * num_classes + c2;
-				val += pairwise_kernel[idx];
-			}
+		for (int offset = 0; offset < NUM_CLASSIFIER; ++ offset) {
+			int c1 = task_start_index[i] + offset;
+			int c2 = task_start_index[j] + offset;
+			int idx = c1 * num_classes + c2;
+			val += pairwise_kernel[idx];
+		}
 		out[ij] = val;
 	}
 
@@ -167,18 +170,20 @@ __global__ void backward_weight(
 	
 	CUDA_KERNEL_LOOP(id, num_classes * feature_dim) {
 		int i = id / feature_dim, d = id % feature_dim;
+		int task_i = data2task[i], offset = i % NUM_CLASSIFIER;
 		Dtype val = 0;
-		for (int j = 0; j < num_classes; ++ j) {
-			int ij = i * num_classes + j;
-			int jd = j * feature_dim + d;
-			int task_i = data2task[i], task_j = data2task[j];
+
+		for (int task_j = 0; task_j < num_tasks; ++ task_j) {
+			if (task_i == task_j) continue;
 			int task_ij = task_i * num_tasks + task_j;
+			int j = task_j * NUM_CLASSIFIER + offset;
+			int jd = j * feature_dim + d;
+			int ij = i * num_classes + j;
 			Dtype weight = - (data[id] - data[jd]) / sigma;
-			if (task_i != task_j) {
-				val += Omega[task_ij] * pairwise_kernel[ij] * weight;
-			}
+			val += Omega[task_ij] * pairwise_kernel[ij] * weight;
 		}
 		out[id] = val;
+
 	}
 
 }
@@ -194,6 +199,22 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
 	const int* data2task = data2task_.gpu_data();
 	Dtype* Omega = this->blobs_[0]->mutable_gpu_data();
 	Dtype* W_diff = data_.mutable_gpu_diff();
+
+	// set weight gradient
+	backward_weight<Dtype><<<CAFFE_GET_BLOCKS(num_classes_ * feature_dim_),
+		CAFFE_CUDA_NUM_THREADS>>>(pairwise_kernel, data, data2task,
+															Omega, sigma_, W_diff,
+															num_tasks_, num_classes_, feature_dim_);
+
+	// backward gradient to bottom
+	int count = 0;
+	for (int i = 0; i < num_tasks_; ++ i) {
+		Dtype* bottom_diff = bottom[i]->mutable_gpu_diff();
+		caffe_gpu_memcpy(bottom[i]->count() * sizeof(Dtype), 
+										 W_diff + count, bottom_diff);
+		count += bottom[i]->count();
+		caffe_gpu_scal<Dtype>(bottom[i]->count(), top[0]->cpu_diff()[0], bottom_diff);
+	}
 
 	caffe_cpu_matrix_sqrt(num_tasks_, A_.mutable_cpu_data());
 
@@ -231,24 +252,6 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
   // copy to Omega
   caffe_gpu_memcpy(sizeof(Dtype) * num_tasks_ * num_tasks_, 
 									 A_.gpu_data(), Omega);
-
-	
-	// set weight gradient
-	backward_weight<Dtype><<<CAFFE_GET_BLOCKS(num_classes_ * feature_dim_),
-		CAFFE_CUDA_NUM_THREADS>>>(pairwise_kernel, data, data2task,
-															Omega, sigma_, W_diff,
-															num_tasks_, num_classes_, feature_dim_);
-
-	// backward gradient to bottom
-	int count = 0;
-	for (int i = 0; i < num_tasks_; ++ i) {
-		Dtype* bottom_diff = bottom[i]->mutable_gpu_diff();
-		caffe_gpu_memcpy(bottom[i]->count() * sizeof(Dtype), 
-										 W_diff + count, bottom_diff);
-		count += bottom[i]->count();
-		caffe_gpu_scal<Dtype>(bottom[i]->count(), top[0]->cpu_diff()[0], bottom_diff);
-	}
-
 }
 
 INSTANTIATE_LAYER_GPU_FUNCS(MultiTaskWeightLossLayer);
