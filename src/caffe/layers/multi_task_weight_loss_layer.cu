@@ -174,7 +174,9 @@ __global__ void backward_weight(
 			int task_i = data2task[i], task_j = data2task[j];
 			int task_ij = task_i * num_tasks + task_j;
 			Dtype weight = - (data[id] - data[jd]) / sigma;
-			val += Omega[task_ij] * pairwise_kernel[ij] * weight;
+			if (task_i != task_j) {
+				val += Omega[task_ij] * pairwise_kernel[ij] * weight;
+			}
 		}
 		out[id] = val;
 	}
@@ -192,16 +194,6 @@ void MultiTaskWeightLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& t
 	const int* data2task = data2task_.gpu_data();
 	Dtype* Omega = this->blobs_[0]->mutable_gpu_data();
 	Dtype* W_diff = data_.mutable_gpu_diff();
-
-	// calculate A
-	// calculate_A<Dtype><<<CAFFE_GET_BLOCKS(num_tasks_ * num_tasks_),
-	// 	CAFFE_CUDA_NUM_THREADS>>>(pairwise_kernel, task_start_index, task_end_index,
-	// 														A_.mutable_gpu_data(), num_tasks_, num_classes_);
-
-	// if(debug_info_){
-	// 	LOG(INFO) << "-------------------------------------A";
-	// 	print_gpu_matrix(A_.gpu_data(), num_tasks_, num_tasks_, num_tasks_, num_tasks_);
-	// }
 
 	caffe_cpu_matrix_sqrt(num_tasks_, A_.mutable_cpu_data());
 
