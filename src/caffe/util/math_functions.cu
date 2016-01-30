@@ -415,4 +415,33 @@ void caffe_gpu_rng_gaussian(const int n, const double mu, const double sigma,
       curandGenerateNormalDouble(Caffe::curand_generator(), r, n, mu, sigma));
 }
 
+template <typename Dtype>
+__global__ void trace_kernel(const int n, const Dtype* A, Dtype* out) {
+  CUDA_KERNEL_LOOP(index, 1) {
+    Dtype val = 0;
+    for (int i = 0; i < n; ++ i) {
+      val += A[i * (n + 1)];
+    }
+    out[0] = val;
+  }
+}
+
+template <>
+void caffe_gpu_trace<float>(const int n, const float* A, float* x) {
+  Blob<float> temp;
+  temp.Reshape(1, 1, 1, 1);
+  trace_kernel<float><<<CAFFE_GET_BLOCKS(1),
+    CAFFE_CUDA_NUM_THREADS>>>(n, A, temp.mutable_gpu_data());
+  *x = temp.cpu_data()[0];
+}
+
+template <>
+void caffe_gpu_trace<double>(const int n, const double* A, double* x) {
+  Blob<double> temp;
+  temp.Reshape(1, 1, 1, 1);
+  trace_kernel<double><<<CAFFE_GET_BLOCKS(1),
+    CAFFE_CUDA_NUM_THREADS>>>(n, A, temp.mutable_gpu_data());
+  *x = temp.cpu_data()[0];
+}
+
 }  // namespace caffe

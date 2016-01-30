@@ -33,22 +33,34 @@ class MultiTaskWeightLossLayer : public LossLayer<Dtype> {
 		NOT_IMPLEMENTED;
 	}
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
-		const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom){
+		const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
 		NOT_IMPLEMENTED;
 	}
   virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-  
+
+ private:
+  void Forward_gpu_FillWByTask(const vector<Blob<Dtype>*>& bottom);
+  void Forward_gpu_FillAByTask();
+  void Backward_gpu_UpdateOmega();
+  void Backward_gpu_FillWByClass(const vector<Blob<Dtype>*>& bottom);
+  void Backward_gpu_FillAByClass();
+  void Backward_gpu_UpdateTheta();
+  void Backward_gpu_Backprop(const vector<Blob<Dtype>*>& bottom,
+                             const vector<Blob<Dtype>*>& top);
+
 	bool debug_info_, debug_detail_;
-  int num_tasks_, num_classes_, feature_dim_;
-  Blob<Dtype> data_;
-	Blob<int> task_start_index_, task_end_index_, data2task_;
-	Blob<Dtype> pairwise_sqr_distance_, pairwise_kernel_;
-	Blob<Dtype> loss_;
-  Blob<Dtype> A_;
-	Dtype sigma_;
+  bool fronzen_omega_, fronzen_theta_;
+  int num_task_, num_class_, num_feature_;
+  vector<Blob<Dtype>*> W_by_task_; // W: C x D
+  vector<Blob<Dtype>*> W_by_class_; // W: T X D
+  Blob<Dtype> A_by_task_; // T x T
+  Blob<Dtype> A_by_class_; // C x C
+  Blob<Dtype> Omega_; // T x T
+  Blob<Dtype> Theta_; // C x C
+  Blob<Dtype> temp_D_C_ temp_D_D_, temp_D_T_;
 };
 
 }  // namespace caffe
